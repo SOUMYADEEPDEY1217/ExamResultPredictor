@@ -1,20 +1,6 @@
 import { useState } from 'react'
+import axios from 'axios'
 import './App.css'
-
-// Dynamic API resolution for local vs Vercel production deployment
-const getApiEndpoint = () => {
-  // If user defines an explicit VITE_API_URL environment variable in Vercel
-  if (import.meta.env.VITE_API_URL) {
-    const base = import.meta.env.VITE_API_URL.replace(/\/+$/, '')
-    return `${base}/predict`
-  }
-  // In production on Vercel (same-domain serverless function)
-  if (import.meta.env.PROD) {
-    return '/api/predict'
-  }
-  // Local development default
-  return 'http://127.0.0.1:8000/predict'
-}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('CREATE') // 'CREATE' (or 'PREDICT') vs 'EXPLORE'
@@ -93,25 +79,10 @@ export default function App() {
     setLoading(true)
     setErrorMsg(null)
 
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 6000)
-
     try {
-      const endpoint = getApiEndpoint()
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-        signal: controller.signal
-      })
-      clearTimeout(timeoutId)
+      const response = await axios.post('https://examresultpredictor.onrender.com/predict', formData)
 
-      if (!response.ok) {
-        throw new Error(`Server returned status ${response.status}`)
-      }
-
-      const data = await response.json()
-      const resultValue = data.predicted_result
+      const resultValue = response.data.predicted_result
       if (resultValue === '1' || resultValue === '1.0' || resultValue === 1 || resultValue === 'Pass') {
         setPrediction('Pass')
         const computedConf = Math.min(99.4, Math.max(68.0, 50 + (formData.Study_Hours_per_Week * 0.6) + (formData.Attendance_Rate * 0.35)))
@@ -122,9 +93,8 @@ export default function App() {
         setConfidence(parseFloat(computedConf.toFixed(1)))
       }
     } catch (error) {
-      clearTimeout(timeoutId)
-      console.warn("Backend API unavailable or error:", error)
-      // Provide intelligent heuristic ML fallback preview so UI remains responsive
+      console.error("Error making prediction:", error)
+      // Provide intelligent heuristic ML fallback preview if Render free tier is waking up
       const scoreWeight = (formData.Study_Hours_per_Week * 0.8) + (formData.Attendance_Rate * 0.5) + (formData.Past_Exam_Scores * 0.3)
       if (scoreWeight >= 82) {
         setPrediction('Pass')
@@ -133,11 +103,7 @@ export default function App() {
         setPrediction('Fail')
         setConfidence(84.2)
       }
-      if (import.meta.env.PROD) {
-        setErrorMsg("API offline or building. Displaying local ML heuristic prediction.")
-      } else {
-        setErrorMsg("FastAPI server offline (http://127.0.0.1:8000). Displaying local ML heuristic preview.")
-      }
+      setErrorMsg("Render free instance may be waking up (can take ~30-50s). Showing heuristic preview in the meantime.")
     } finally {
       setLoading(false)
     }

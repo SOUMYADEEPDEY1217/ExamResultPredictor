@@ -80,3 +80,4 @@ Open `http://localhost:5173` in your browser.
 2. Keep the **Root Directory** as `.` (root).
 3. Vercel automatically detects `vercel.json` to build the frontend and deploy the serverless Python API at `/api/predict`.
 4. Click **Deploy**!
+
